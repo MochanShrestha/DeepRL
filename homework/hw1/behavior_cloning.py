@@ -66,7 +66,7 @@ class Playground:
                     obs, r, done, _ = self.env.step(action)
                     sumreward += r
                     steps += 1
-                    done=False
+                    #done=False
                     if render:
                         self.env.render()
                     if steps >= max_timeSteps:
@@ -99,33 +99,44 @@ def main():
 
     expertAgent = Expert(args.expert_policy_file)
     simulator = Playground(args.envname)
-    expert_observations, expert_actions = simulator.simulate(expertAgent, args.num_rollouts, args.max_timesteps, False)
+    expert_observations, expert_actions = simulator.simulate(expertAgent, args.num_rollouts, args.max_timesteps, False)    
+
     observationDimension = expert_observations.shape[-1]
-    actionDimension = expert_actions.shape[-1]
+    actionDimension = expert_actions.shape[-1]    
     dimensions = [observationDimension, actionDimension]
-    clone = Clone(dimensions)
+    clone = Clone(dimensions)    
     lossValue = clone.train([expert_observations, expert_actions], args.num_epochs, args.batch_size)
 
-    name = input("Running DAgger")
-    simulator = Playground(args.envname)
+    #simulator = Playground(args.envname)
     agentObservations, agentActions = simulator.simulate(clone, args.num_rollouts, args.max_timesteps, False)
+    
     cloneobservation, expertLabeledactions = simulator.DAgger(expertAgent, agentObservations)
+    #name = input("Finished Running DAgger")
+    print(cloneobservation.shape)
+    print(expertLabeledactions.shape)
+
+    print(expert_observations)
+    print(expertLabeledactions)
+
     cloneobservation = np.concatenate((cloneobservation, expert_observations), axis=0)
     expertLabeledactions = np.concatenate((expertLabeledactions, expert_actions), axis=0)
+    #print(shape(cloneobservation))
+    #print(shape(expertLabeledactions))
     daggerIter = 10
     for i in range(daggerIter):
-        dimensions = [cloneobservation.shape[-1], expertLabeledactions.shape[-1]]
-        clone1 = Clone(dimensions)
-        lossValue = clone1.train([cloneobservation, expertLabeledactions], args.num_epochs, args.batch_size)
-        if i==daggerIter-1:
-            name = input("Running DAgger")
-            agentObservations1, agentActions1 = simulator.simulate(clone1, 1000, 1000, True)
-        else:
-            agentObservations1, agentActions1 = simulator.simulate(clone1, args.num_rollouts, args.max_timesteps, False)
+        #dimensions = [cloneobservation.shape[-1], expertLabeledactions.shape[-1]]
+        #clone1 = Clone(dimensions)
+        lossValue = clone.train([cloneobservation, expertLabeledactions], args.num_epochs, args.batch_size)
+
+        agentObservations1, agentActions1 = simulator.simulate(clone, args.num_rollouts, args.max_timesteps, True)
+        
         cloneobservation1, expertLabeledactions1 = simulator.DAgger(expertAgent, agentObservations1)
         
         cloneobservation = np.concatenate((cloneobservation, cloneobservation1), axis=0)
         expertLabeledactions = np.concatenate((expertLabeledactions, expertLabeledactions1), axis=0)
+
+        print(cloneobservation.shape)
+        print(expertLabeledactions.shape)
             
 
     name = input("Done")
