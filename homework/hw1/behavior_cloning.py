@@ -18,6 +18,7 @@ class Expert:
     def react(self, observation):
         return self.policy(observation)
 
+
 #Clone copies the behavior of the expert. Will be called by playground
 class Clone:
     def __init__(self, dimension):
@@ -39,6 +40,7 @@ class Clone:
     def react(self, observation):
         return self.model.predict(observation, batch_size=5000, verbose=0)
 
+
 class Playground:
     def __init__(self, environment):
         self.environment_name = environment
@@ -46,10 +48,11 @@ class Playground:
     
     def initialize(self):
         self.env = gym.make(self.environment_name)
-    
-    def simulate(self, agent, num_rollouts, max_timeSteps, render):
         with tf.Session():
-            tf_util.initialize()
+            tf_util.initialize()   
+    
+    def simulate_expert(self, agent, num_rollouts, max_timeSteps, render):
+        with tf.Session():                     
             observations = []
             actions = []
             max_timeSteps = max_timeSteps or self.env.spec.timestep_limit
@@ -75,7 +78,34 @@ class Playground:
             expert_observations = np.array(observations)
             expert_actions =  np.array(actions)
             return expert_observations, expert_actions
-    
+
+    def simulate(self, agent, num_rollouts, max_timeSteps, render):                
+        observations = []
+        actions = []
+        max_timeSteps = max_timeSteps or self.env.spec.timestep_limit
+        for i in range(num_rollouts):
+            print('iter', i)
+            obs = self.env.reset()
+            done = False
+            steps = 0
+            sumreward = 0
+            while not done:
+                action = agent.react(obs[None,:])
+                observations.append(obs)
+                actions.append(np.squeeze(action))
+                obs, r, done, _ = self.env.step(action)
+                sumreward += r
+                steps += 1
+                #done=False
+                if render:
+                    self.env.render()
+                if steps >= max_timeSteps:
+                    break
+            print("Reward:" + str(sumreward))
+        expert_observations = np.array(observations)
+        expert_actions =  np.array(actions)
+        return expert_observations, expert_actions
+
     def DAgger(self, expert, observations):
         with tf.Session():
             actions = []
@@ -99,7 +129,7 @@ def main():
 
     expertAgent = Expert(args.expert_policy_file)
     simulator = Playground(args.envname)
-    expert_observations, expert_actions = simulator.simulate(expertAgent, args.num_rollouts, args.max_timesteps, False)    
+    expert_observations, expert_actions = simulator.simulate_expert(expertAgent, args.num_rollouts, args.max_timesteps, False)    
 
     observationDimension = expert_observations.shape[-1]
     actionDimension = expert_actions.shape[-1]    
@@ -125,7 +155,8 @@ def main():
     daggerIter = 10
     for i in range(daggerIter):
         #dimensions = [cloneobservation.shape[-1], expertLabeledactions.shape[-1]]
-        #clone1 = Clone(dimensions)
+        #clone = Clone(dimensions)
+
         lossValue = clone.train([cloneobservation, expertLabeledactions], args.num_epochs, args.batch_size)
 
         agentObservations1, agentActions1 = simulator.simulate(clone, args.num_rollouts, args.max_timesteps, True)
